@@ -100,7 +100,7 @@ if ( params.paired_read_dir) {
 
 
 log.info "======================================================================"
-log.info "                  Bwa pipeline"
+log.info "                  BWA pipeline"
 log.info "======================================================================"
 log.info "Running version   : ${version}"
 if ( params.paired_read_dir || params.single_read_dir ) {
@@ -168,6 +168,7 @@ if ( params.paired_read_dir ) {
 
 }
 
+
 process sam_to_sorted_bam_and_index {
   publishDir "${output_dir}", mode: 'copy'
 
@@ -177,8 +178,7 @@ process sam_to_sorted_bam_and_index {
   set id, file(sam_file) from sam_file
 
   output:
-  file "${prefix}.sorted.bam" into sorted_bam
-  file "${prefix}.sorted.bam.bai" into bam_index_file
+  set val(id), file("${prefix}.sorted.bam"), file("${prefix}.sorted.bam.bai") into sorted_bam_and_index
 
   script:
   prefix = sam_file.baseName
@@ -186,6 +186,25 @@ process sam_to_sorted_bam_and_index {
   samtools view -bS ${sam_file} | samtools sort - -o ${prefix}.sorted.bam
   samtools index ${prefix}.sorted.bam
   """
+}
+
+process create_vcf {
+  publishDir "${output_dir}", mode: 'copy'
+
+  tag {id}
+
+  input:
+  file reference_file
+  set id, file(sorted_bam), file(bam_index) from sorted_bam_and_index
+
+  output:
+  file("${id}.vcf")
+
+  script:
+  """
+  samtools mpileup -t DP,AD,SP,ADF,ADR,INFO/AD,INFO/ADF,INFO/ADR -Auvf ${reference_file} -o ${id}.vcf ${sorted_bam}
+  """
+
 }
 
 workflow.onComplete {
